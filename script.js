@@ -1,4 +1,3 @@
-
 // --- Configuration ---
 const apiKey = "cvi1cc9r01qks9q7knqgcvi1cc9r01qks9q7knr0"; // <<< USER PROVIDED KEY (INSECURE!)
 const finnhubBaseUrl = "https://finnhub.io/api/v1";
@@ -161,6 +160,9 @@ const saveAppDataToLocalStorage = () => {
     localStorage.setItem(`${LS_PREFIX_APP}activeWatchlistName_v1`, activeWatchlistName);
     // DCF values are saved individually in calculateDCF
     console.log("App data saved to Local Storage.");
+    if (currentUserUid) {
+      saveDataToFirebase(); // Auto-save to Firebase whenever state changes
+    }
   } catch (e) {
     console.error("LS Save Error:", e);
     setStatus("Could not save app state locally.", "error");
@@ -238,18 +240,14 @@ const updateLoginUI = (user) => {
     userStatusEl.textContent = `Logged in as ${user.displayName || user.email}`;
     loginGoogleBtn.style.display = 'none';
     logoutGoogleBtn.style.display = 'block';
-    saveFirebaseBtn.style.display = 'block';
-    loadFirebaseBtn.style.display = 'block';
   } else {
     currentUserUid = null;
     userStatusEl.textContent = 'Not logged in';
     loginGoogleBtn.style.display = 'block';
     logoutGoogleBtn.style.display = 'none';
-    saveFirebaseBtn.style.display = 'none';
-    loadFirebaseBtn.style.display = 'none';
   }
-   // Close hamburger menu after action
-  menuDropdown.classList.remove('active');
+  saveFirebaseBtn.style.display = 'none';
+  loadFirebaseBtn.style.display = 'none';
 };
 
 const signInWithGoogle = async () => {
@@ -1781,8 +1779,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateLoginUI(user);
     if (user) {
       // User logged in - consider auto-loading their data?
-      // Or prompt them? For now, require explicit load click.
-      // loadDataFromFirebase(); // Uncomment for auto-load on login
+      loadDataFromFirebase(); // Auto-load from Firebase on login/page refresh
       console.log("User logged in:", user.uid);
       setStatus(`Logged in as ${user.displayName || user.email}. Use menu to load cloud data.`, 'info', 6000);
 
