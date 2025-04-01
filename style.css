@@ -49,7 +49,20 @@ body {
   background-color: var(--header-bg);
   padding: 15px 0;
   text-align: center;
-  position: relative; /* For absolute positioning of hamburger */
+  position: relative; /* For absolute positioning */
+}
+
+/* User Status Styling */
+#user-status {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8em;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 3px 8px;
+  border-radius: 4px;
 }
 
 .hamburger-menu {
@@ -86,8 +99,8 @@ body {
   background-color: white;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  padding: 0;
-  min-width: 200px;
+  padding: 5px 0; /* Added padding top/bottom */
+  min-width: 220px; /* Slightly wider for new options */
   display: none;
   z-index: 100;
   overflow: hidden;
@@ -101,15 +114,16 @@ body {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 12px 16px;
+  padding: 10px 16px; /* Adjusted padding */
   background-color: transparent;
   color: var(--text-color);
   text-decoration: none;
   border-radius: 0;
   font-size: 0.9em;
   font-weight: 400;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease; /* Added color transition */
   border-left: 3px solid transparent;
+  white-space: nowrap; /* Prevent wrapping */
 }
 
 .menu-dropdown .yahoo-link-button:hover {
@@ -117,6 +131,15 @@ body {
   color: var(--link-color);
   border-left: 3px solid var(--link-color);
 }
+
+/* Specific styling for Firebase buttons for visual distinction if needed */
+#login-google, #logout-google {
+  /* color: #4285F4; Google Blue */
+}
+#save-firebase, #load-firebase {
+ /* color: #FFA000; Firebase Amber */
+}
+
 
 .controls-area {
   background-color: var(--controls-bg);
@@ -571,7 +594,7 @@ h1 {
 
 .valuation-buttons button {
   padding: 9px 15px;
-  color: #333;
+  color: #333; /* Changed text color for better contrast on colored buttons */
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -583,6 +606,7 @@ h1 {
 
 #calculate-dcf {
   background-color: var(--success-color);
+  color: white; /* Ensure text is readable */
 }
 
 #calculate-dcf:hover {
@@ -592,6 +616,7 @@ h1 {
 #reset-dcf {
   background-color: var(--button-warn-bg);
   border-color: #eea236;
+  color: white; /* Ensure text is readable */
 }
 
 #reset-dcf:hover {
@@ -649,6 +674,18 @@ h1 {
   }
   .title-area h1 {
     font-size: 1.4em;
+    /* Make space for user status */
+    padding-left: 60px;
+    padding-right: 60px;
+    text-align: center;
+  }
+   #user-status {
+    /* Adjust position on smaller screens */
+    left: 10px;
+    font-size: 0.75em;
+  }
+  .hamburger-menu {
+    right: 10px;
   }
   .stock-header {
     flex-direction: column;
@@ -692,7 +729,17 @@ h1 {
     padding: 12px 15px;
   }
   .title-area h1 {
-    font-size: 1.3em;
+    font-size: 1.2em; /* Further reduce size */
+    padding-left: 50px; /* Adjust padding */
+    padding-right: 50px;
+  }
+   #user-status {
+    font-size: 0.7em;
+    padding: 2px 5px;
+  }
+  .hamburger-icon {
+     width: 20px; /* Smaller hamburger */
+     height: 16px;
   }
   .tab-buttons {
     overflow-x: auto;

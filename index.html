@@ -3,14 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stock Watchlist MVP (v32 - Rename/Delete List)</title>
+  <title>Stock Watchlist + Firebase (v33)</title>
   <link rel="stylesheet" href="style.css">
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore-compat.js"></script>
+
 </head>
 <body>
   <div class="container">
     <div class="header-area">
       <div class="title-area">
         <h1>Stock Watchlist</h1>
+        <div id="user-status">Not logged in</div> <!-- User status display -->
         <div class="hamburger-menu">
           <div class="hamburger-icon">
             <span></span>
@@ -18,9 +25,16 @@
             <span></span>
           </div>
           <div class="menu-dropdown">
+            <!-- Firebase Actions -->
+            <a href="#" id="login-google" class="yahoo-link-button">Login with Google</a>
+            <a href="#" id="logout-google" class="yahoo-link-button" style="display: none;">Logout</a>
+            <a href="#" id="save-firebase" class="yahoo-link-button" style="display: none;">Save Watchlists to Cloud</a>
+            <a href="#" id="load-firebase" class="yahoo-link-button" style="display: none;">Load Watchlists from Cloud</a>
+            <hr style="margin: 5px 0;"> <!-- Separator -->
+            <!-- Local Actions -->
             <a href="https://finance.yahoo.com/portfolio/pf_83bd0c7dc4e8a83c92323cf40_mfap_da990ecf7f074108976d999e741c3507/view/v1" target="_blank" rel="noopener noreferrer" class="yahoo-link-button">View Yahoo Portfolio</a>
-            <a href="#" id="save-watchlists" class="yahoo-link-button">Save Watchlists</a>
-            <a href="#" id="load-watchlists" class="yahoo-link-button">Load Watchlists</a>
+            <a href="#" id="save-watchlists" class="yahoo-link-button">Save Watchlists (Local File)</a>
+            <a href="#" id="load-watchlists" class="yahoo-link-button">Load Watchlists (Local File)</a>
           </div>
         </div>
       </div>
