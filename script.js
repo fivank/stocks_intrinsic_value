@@ -932,10 +932,36 @@ const removeStock = (symbolToRemove) => {
   setStatus(`${symbolToRemove} removed from "${activeWatchlistName}".`, "info");
 };
 
-// --- Initialization ---
-addButton.addEventListener('click', addStock);
-tickerInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addStock(); });
+// --- Hamburger Menu Functionality ---
 document.addEventListener('DOMContentLoaded', () => {
+  const hamburgerIcon = document.querySelector('.hamburger-icon');
+  const menuDropdown = document.querySelector('.menu-dropdown');
+  
+  if (hamburgerIcon && menuDropdown) {
+    hamburgerIcon.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menuDropdown.classList.toggle('active');
+    });
+    
+    // Close the menu when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!hamburgerIcon.contains(e.target) && !menuDropdown.contains(e.target)) {
+        menuDropdown.classList.remove('active');
+      }
+    });
+  }
+  
+  // Add the missing event listener for the Add Stock button
+  addButton.addEventListener('click', addStock);
+  
+  // Handle Enter key in the ticker input field
+  tickerInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      addStock();
+    }
+  });
+  
+  // Your existing DOMContentLoaded code...
   console.log("DOM Loaded - Watchlist v32 (List Mgmt)");
   loadAppData();
   populateWatchlistSelector();
