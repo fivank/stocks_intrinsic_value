@@ -991,6 +991,42 @@ document.addEventListener('DOMContentLoaded', () => {
       saveLocalDataToFile();
     });
   }
+
+  // New: Load Watchlists functionality
+  const loadWatchlistsEl = document.getElementById('load-watchlists');
+  if (loadWatchlistsEl) {
+    loadWatchlistsEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json';
+      input.style.display = 'none';
+      input.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const loadedData = JSON.parse(e.target.result);
+            Object.keys(loadedData).forEach(key => {
+              localStorage.setItem(key, loadedData[key]);
+            });
+            loadAppData();
+            populateWatchlistSelector();
+            renderWatchlist();
+            setStatus('Watchlists loaded from file.', 'success');
+          } catch (error) {
+            console.error('Error parsing JSON file', error);
+            setStatus('Error loading watchlists from file.', 'error');
+          }
+        };
+        reader.readAsText(file);
+      });
+      document.body.appendChild(input);
+      input.click();
+      document.body.removeChild(input);
+    });
+  }
   
   console.log("DOM Loaded - Watchlist v32 (List Mgmt)");
   loadAppData();
