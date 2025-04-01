@@ -8,28 +8,34 @@
 </head>
 <body>
   <div class="container">
-    <h1>Stock Watchlist</h1>
-
-    <div class="top-controls">
-      <div class="watchlist-select-container">
-        <label for="watchlist-selector">Watchlist:</label>
-        <select id="watchlist-selector" onchange="handleWatchlistChange(this.value)">
-          <!-- Options populated by JS -->
-        </select>
-        <button id="rename-list-btn" class="list-action-button" onclick="renameCurrentList()" title="Rename Current List">Rename</button>
-        <button id="delete-list-btn" class="list-action-button" onclick="deleteCurrentList()" title="Delete Current List">Delete</button>
+    <div class="header-area">
+      <div class="title-area">
+        <h1>Stock Watchlist</h1>
       </div>
+      <div class="controls-area">
+        <div class="watchlist-select-container">
+          <label for="watchlist-selector">Watchlist:</label>
+          <select id="watchlist-selector" onchange="handleWatchlistChange(this.value)">
+            <!-- Options populated by JS -->
+          </select>
+          <button id="rename-list-btn" class="list-action-button" onclick="renameCurrentList()" title="Rename Current List">Rename</button>
+          <button id="delete-list-btn" class="list-action-button" onclick="deleteCurrentList()" title="Delete Current List">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-area">
       <div class="external-links">
         <a href="https://finance.yahoo.com/portfolio/pf_83bd0c7dc4e8a83c92323cf40_mfap_da990ecf7f074108976d999e741c3507/view/v1" target="_blank" rel="noopener noreferrer" class="yahoo-link-button">View Yahoo Portfolio</a>
       </div>
-    </div>
 
-    <div class="input-area">
-      <input type="text" id="tickerInput" placeholder="Enter Ticker Symbol (e.g., AAPL)">
-      <button id="addButton">Add Stock</button>
+      <div class="input-area">
+        <input type="text" id="tickerInput" placeholder="Enter Ticker Symbol (e.g., AAPL)">
+        <button id="addButton">Add Stock</button>
+      </div>
+      <div id="status"></div>
+      <ul id="watchlist"></ul>
     </div>
-    <div id="status"></div>
-    <ul id="watchlist"></ul>
   </div>
 
   <script src="script.js" defer></script>
