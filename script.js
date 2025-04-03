@@ -240,14 +240,16 @@ const updateLoginUI = (user) => {
     userStatusEl.textContent = `Logged in as ${user.displayName || user.email}`;
     loginGoogleBtn.style.display = 'none';
     logoutGoogleBtn.style.display = 'block';
+    saveFirebaseBtn.style.display = 'block'; // Show Firebase buttons when logged in
+    loadFirebaseBtn.style.display = 'block';
   } else {
     currentUserUid = null;
     userStatusEl.textContent = 'Not logged in';
     loginGoogleBtn.style.display = 'block';
     logoutGoogleBtn.style.display = 'none';
+    saveFirebaseBtn.style.display = 'none'; // Hide Firebase buttons when logged out
+    loadFirebaseBtn.style.display = 'none';
   }
-  saveFirebaseBtn.style.display = 'none';
-  loadFirebaseBtn.style.display = 'none';
 };
 
 const signInWithGoogle = async () => {
@@ -350,9 +352,15 @@ const loadDataFromFirebase = async () => {
 
       // Populate local storage with cloud data
       Object.keys(cloudData).forEach(key => {
-        // Don't restore the timestamp field itself
-         if (key !== `${LS_PREFIX_APP}lastSavedTimestamp`) {
-            localStorage.setItem(key, cloudData[key]);
+        // Don't restore the timestamp field itself or legacy fields if needed
+         if (key !== `${LS_PREFIX_APP}lastSavedTimestamp` && key !== 'stockApp_watchlists' && key !== 'stockApp_activeList') { // Add legacy checks if needed
+            // Firestore Timestamps need careful handling if stored directly; assume strings for now
+            const value = cloudData[key];
+             // Example: Convert Firestore timestamp object back to string if necessary
+             // if (value && typeof value === 'object' && value.hasOwnProperty('seconds')) {
+             //     value = new Date(value.seconds * 1000).toISOString(); // Example conversion
+             // }
+            localStorage.setItem(key, value);
             console.log(`  Loaded ${key} to localStorage`);
          }
       });
@@ -743,17 +751,16 @@ const resetDCFDefaults = (symbol) => {
       comparisonEl.className = '';
   }
 
-  // Provide status update
-  if (defaultsRestored && !errorsEncountered) {
-    setStatus(`DCF inputs reset to defaults for ${symbol}.`, 'info');
-  } else if (defaultsRestored && errorsEncountered) {
-      setStatus(`DCF inputs partially reset for ${symbol}; some defaults missing.`, 'info');
-  } else {
-    setStatus(`Could not reset defaults for ${symbol}. Check console for details.`, 'error');
-  }
+   // Automatically recalculate DCF with the reset defaults
+   if (defaultsRestored) {
+       calculateDCF(symbol); // Trigger calculation after resetting
+       setStatus(`DCF inputs reset to defaults and recalculated for ${symbol}.`, 'info');
+   } else if (errorsEncountered) {
+       setStatus(`Could not reset all defaults for ${symbol}. Check console for details.`, 'error');
+   }
 };
 
-// --- fetchFinancials (v31 - Handles Persistent Inputs) ---
+// --- fetchFinancials (v33+ - Shows Reported FCF/Cash, uses Calculated FCF for DCF) ---
 const fetchFinancials = async (symbol, detailsContainer) => {
     console.log(`[fetchFinancials] Starting for ${symbol}`);
     // Clear previous content and show loading state immediately
@@ -764,7 +771,7 @@ const fetchFinancials = async (symbol, detailsContainer) => {
     const results = {
         current: { price: null, marketCap: null, beta: null }, // From basic data + metrics
         currentValuation: { pe: null, ps: null, pb: null, pfcf: null }, // Derived from latest data
-        historical: {}, // Stores arrays/objects of historical metrics { 'Revenue': { 0: val, -1: val, ...}, ... }
+        historical: {}, // Stores arrays/objects of historical metrics { 'Revenue': { 0: val, -1: val, ...}, ...}
         growth: {}, // Stores calculated CAGR { 'Revenue': { '1Y': %, '5Y': %, ... }, ... }
         dcfDefaults: { fcf0: 0, gr: 0.05, n: 5, r: 0.09, g: DEFAULT_TERMINAL_GROWTH_RATE } // Default fallback values
     };
@@ -778,7 +785,10 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         'EBIT': 'good',
         'Net Earnings': 'good',
         'Operating Cash Flow': 'good',
-        'Free Cash Flow': 'good',
+        // 'Free Cash Flow': 'good', // Keep type if calculating growth later
+        'Reported FCF': 'good', // Reported FCF is generally good
+        'Ending Cash': 'good',   // More cash is generally good
+        'Capital Expenditures': 'bad', // Lower (less negative) CapEx growth might be good, but CapEx itself isn't inherently good/bad %
         'Total Assets': 'good',
         'Total Liabilities': 'bad',
         'Shareholders Equity': 'good'
@@ -789,7 +799,11 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         'EBIT': ['us-gaap_OperatingIncomeLoss', 'OperatingIncomeLoss', 'us-gaap_IncomeLossFromContinuingOperationsBeforeIncomeTaxExpenseBenefit', 'IncomeLossFromContinuingOperationsBeforeIncomeTaxExpenseBenefit'], // Added Pretax Income as fallback
         'Net Earnings': ['us-gaap_NetIncomeLoss', 'us-gaap_ProfitLoss', 'NetIncomeLoss', 'ProfitLoss', 'NetIncomeLossAvailableToCommonStockholdersBasic', 'us-gaap_NetIncomeLossAvailableToCommonStockholdersBasic', 'ConsolidatedNetIncomeLoss', 'NetIncomeLossAttributableToParent', 'netIncome'],
         'Operating Cash Flow': ['us-gaap_NetCashProvidedByUsedInOperatingActivities', 'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations', 'us-gaap_NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'],
-        'Capital Expenditures': ['us-gaap_PaymentsToAcquirePropertyPlantAndEquipment', 'us-gaap_PurchaseOfPropertyPlantAndEquipment', 'us-gaap_PaymentsToAcquireProductiveAssets', 'PaymentsToAcquireProductiveAssets'], // Added variations
+        'Capital Expenditures': ['us-gaap_PaymentsToAcquirePropertyPlantAndEquipment', 'us-gaap_PurchaseOfPropertyPlantAndEquipment', 'us-gaap_PaymentsToAcquireProductiveAssets', 'PaymentsToAcquireProductiveAssets'], // CapEx is often negative
+        // *** NEW/MODIFIED ***
+        'Reported FCF': ['us-gaap_FreeCashFlow', 'FreeCashFlow'], // Attempt to find reported FCF (might often be null)
+        'Ending Cash': ['us-gaap_CashAndCashEquivalentsAtCarryingValue', 'CashAndCashEquivalentsAtCarryingValue'], // Cash on Balance Sheet
+        // *** END NEW/MODIFIED ***
         'Total Assets': ['us-gaap_Assets', 'Assets', 'totalAssets'],
         'Total Liabilities': ['us-gaap_Liabilities', 'Liabilities', 'totalLiabilities'],
         'Shareholders Equity': ['us-gaap_StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'us-gaap_StockholdersEquity', 'us-gaap_EquityAttributableToParent', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest', 'StockholdersEquity', 'TotalEquity', 'totalStockholdersEquity', 'EquityAttributableToParent', 'us-gaap_Assets', 'us-gaap_Liabilities'] // Added A-L as fallback for equity
@@ -841,10 +855,13 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         });
          // Add derived metrics
          results.historical['Net Earn. Marg.(%)'] = {};
-         results.historical['Free Cash Flow'] = {};
+         // results.historical['Free Cash Flow'] = {}; // No longer storing calculated FCF here for display
          results.historical['Debt/Asset Ratio (%)'] = {};
          results.historical['ROA (%)'] = {};
          results.historical['INTERNAL_Assets_Avg'] = {}; // For ROA calc
+
+        // Store calculated FCF specifically for DCF default calculation later
+        let latestCalculatedFcf = null;
 
         // Populate historical data by finding values for each required offset year
         requiredOffsets.forEach(offset => {
@@ -863,6 +880,19 @@ const fetchFinancials = async (symbol, detailsContainer) => {
                       console.log(`Calculated Equity for offset ${offset} as Assets - Liabilities`);
                   }
 
+                  // *** Update for DCF FCF Calculation ***
+                  if (offset === 0) {
+                      const ocf0 = results.historical['Operating Cash Flow']?.[0];
+                      const capex0 = results.historical['Capital Expenditures']?.[0];
+                      if (ocf0 !== null && capex0 !== null) {
+                          // Use subtraction to obtain free cash flow: OCF - CapEx
+                          latestCalculatedFcf = ocf0 - capex0;
+                      } else if (ocf0 !== null) {
+                          latestCalculatedFcf = ocf0; // Fallback to OCF if CapEx missing
+                      }
+                      console.log(`[DCF Prep] Latest Calculated FCF (for default fcf0): ${latestCalculatedFcf}`);
+                  }
+
             } else {
                 // If no report for that year, set all metrics to null for that offset
                 Object.keys(metricDefinitions).forEach(metricName => {
@@ -872,28 +902,29 @@ const fetchFinancials = async (symbol, detailsContainer) => {
             }
         });
 
+        // --- NEW: Fallback for Reported FCF ---
+        requiredOffsets.forEach(offset => {
+            // If Reported FCF is missing, then calculate as Operating Cash Flow - Capital Expenditures
+            if ((results.historical['Reported FCF'][offset] === null || results.historical['Reported FCF'][offset] === undefined)
+               && results.historical['Operating Cash Flow'][offset] != null 
+               && results.historical['Capital Expenditures'][offset] != null) {
+                results.historical['Reported FCF'][offset] = results.historical['Operating Cash Flow'][offset] - results.historical['Capital Expenditures'][offset];
+                console.log(`Calculated Reported FCF for offset ${offset} as OCF - CapEx: ${results.historical['Reported FCF'][offset]}`);
+            }
+        });
+
          // --- Calculate Derived Historical Metrics & Average Assets ---
          requiredOffsets.forEach(offset => {
              const revenueN = results.historical['Revenue']?.[offset];
              const netIncomeN = results.historical['Net Earnings']?.[offset];
-             const ocfN = results.historical['Operating Cash Flow']?.[offset];
-             const capexN = results.historical['Capital Expenditures']?.[offset]; // Might be negative already
+             // const ocfN = results.historical['Operating Cash Flow']?.[offset]; // No longer needed here for calculated FCF display
+             // const capexN = results.historical['Capital Expenditures']?.[offset];
              const assetsN = results.historical['Total Assets']?.[offset];
              const liabilitiesN = results.historical['Total Liabilities']?.[offset];
              const assetsNminus1 = results.historical['Total Assets']?.[offset - 1]; // Need prior year assets for ROA
 
-             // Free Cash Flow (OCF - CapEx). Handle nulls. CapEx is often reported negative, so subtract. If positive, still subtract.
-            if (ocfN !== null && capexN !== null) {
-                 // If CapEx is positive (unusual but possible), subtract it. If negative (usual), subtracting adds it. Let's assume CapEx represents cash *outflow*.
-                 // Safer: FCF = OCF - AbsoluteValue(CapEx) if CapEx concept truly means expenditure amount? Or just OCF + Capex if Capex is reported negative?
-                 // Finnhub usually reports CapEx negatively. So OCF + Capex (which is OCF - expenditure) seems correct.
-                 results.historical['Free Cash Flow'][offset] = ocfN + capexN;
-             } else if (ocfN !== null) {
-                 results.historical['Free Cash Flow'][offset] = ocfN; // Use OCF if CapEx unavailable
-                 // console.log(`FCF offset ${offset} using OCF only.`);
-             } else {
-                 results.historical['Free Cash Flow'][offset] = null;
-             }
+             // Free Cash Flow (No longer calculated for display here)
+             // results.historical['Free Cash Flow'][offset] = calculatedFcfValue;
 
              // Net Earning Margin
              results.historical['Net Earn. Marg.(%)'][offset] = (netIncomeN !== null && revenueN !== null && revenueN !== 0) ? (netIncomeN / revenueN) * 100 : null;
@@ -915,19 +946,19 @@ const fetchFinancials = async (symbol, detailsContainer) => {
 
 
         // --- Estimate Historical Market Caps & Calculate Ratios ---
-        // We need historical prices near the fiscal year ends for P/E, P/S etc.
-        // This part is complex and API-intensive. Let's simplify for now:
         // Calculate CURRENT valuation ratios using latest fundamentals (offset 0) and current market cap.
         const currentMarketCap = results.current.marketCap;
         const latestRevenue = results.historical['Revenue']?.[0];
         const latestNetIncome = results.historical['Net Earnings']?.[0];
         const latestEquity = results.historical['Shareholders Equity']?.[0];
-        const latestFCF = results.historical['Free Cash Flow']?.[0];
+        const latestReportedFCF = results.historical['Reported FCF']?.[0]; // Use reported FCF for P/FCF ratio
 
         results.currentValuation.pe = (currentMarketCap !== null && latestNetIncome !== null && latestNetIncome > 0) ? (currentMarketCap / latestNetIncome) : null;
         results.currentValuation.ps = (currentMarketCap !== null && latestRevenue !== null && latestRevenue !== 0) ? (currentMarketCap / latestRevenue) : null;
         results.currentValuation.pb = (currentMarketCap !== null && latestEquity !== null && latestEquity > 0) ? (currentMarketCap / latestEquity) : null;
-        results.currentValuation.pfcf = (currentMarketCap !== null && latestFCF !== null && latestFCF !== 0) ? (currentMarketCap / latestFCF) : null;
+        // Use REPORTED FCF for the P/FCF Ratio display if available, otherwise fallback to calculated or null
+        const fcfForRatio = latestReportedFCF ?? latestCalculatedFcf; // Prefer reported for ratio display
+        results.currentValuation.pfcf = (currentMarketCap !== null && fcfForRatio !== null && fcfForRatio !== 0) ? (currentMarketCap / fcfForRatio) : null;
 
 
         // --- Calculate Growth Rates (CAGR) ---
@@ -935,6 +966,9 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         const growthYearsMap = { '1Y': 1, '2Y': 2, '5Y': 5, '10Y': 10 };
 
         growthMetricsToCalc.forEach(metric => {
+             // Don't calculate growth for CapEx itself this way (sign issues) unless needed
+             if (metric === 'Capital Expenditures') return;
+
             results.growth[metric] = {};
             const currentVal = results.historical[metric]?.[0]; // T=0 value
 
@@ -951,12 +985,16 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         });
 
         // --- Calculate DCF Default Parameters ---
-        results.dcfDefaults.fcf0 = results.historical['Free Cash Flow']?.[0] ?? 0; // Latest FCF
+        // *** Use the CALCULATED latest FCF (OCF + CapEx) for fcf0 ***
+        results.dcfDefaults.fcf0 = latestCalculatedFcf ?? 0; // Default to 0 if calculation failed
 
-        // Weighted FCF Growth Rate (using 2Y, 5Y, 10Y CAGR if available)
-        const fcfCagr2Y = results.growth['Free Cash Flow']?.['2Y'];
-        const fcfCagr5Y = results.growth['Free Cash Flow']?.['5Y'];
-        const fcfCagr10Y = results.growth['Free Cash Flow']?.['10Y'];
+        // Weighted FCF Growth Rate (using CAGR of CALCULATED FCF if we were to compute it, or Reported FCF growth if available?)
+        // Let's try using Reported FCF Growth if available, otherwise Revenue growth
+        const fcfGrowthMetric = results.growth['Reported FCF'] ? 'Reported FCF' : null; // Check if growth was calculable for reported FCF
+        const fcfCagr2Y = fcfGrowthMetric ? results.growth[fcfGrowthMetric]?.['2Y'] : null;
+        const fcfCagr5Y = fcfGrowthMetric ? results.growth[fcfGrowthMetric]?.['5Y'] : null;
+        const fcfCagr10Y = fcfGrowthMetric ? results.growth[fcfGrowthMetric]?.['10Y'] : null;
+
         let defaultGR = null; // Growth Rate in decimal
         const weights = { y2: 0.5, y5: 0.3, y10: 0.2 };
         let totalWeight = 0;
@@ -968,8 +1006,9 @@ const fetchFinancials = async (symbol, detailsContainer) => {
 
         if (totalWeight > 0) {
             defaultGR = (weightedSum / totalWeight) / 100; // Convert weighted avg % to decimal
+            console.log("Used Reported FCF growth for default GR estimate.");
         } else {
-             // Fallback if no FCF growth calculated (e.g., recent IPO) - use Revenue growth? Or a fixed default?
+             // Fallback if no FCF growth calculated - use Revenue growth
              const revCagr5Y = results.growth['Revenue']?.['5Y'];
              if (revCagr5Y !== null && isFinite(revCagr5Y)) {
                  defaultGR = (revCagr5Y / 100) * 0.8; // Use 80% of 5Y revenue growth as a proxy
@@ -982,7 +1021,7 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         // Clamp default growth rate (e.g., 0% to 20%)
         results.dcfDefaults.gr = Math.max(0, Math.min(defaultGR, 0.20));
 
-        // Default High-Growth Years (n) - Heuristic based on recent growth vs longer term
+        // Default High-Growth Years (n) - Heuristic based on recent growth vs longer term (using same FCF growth basis as GR)
         let defaultN = 5;
         if (fcfCagr2Y !== null && isFinite(fcfCagr2Y) && fcfCagr5Y !== null && isFinite(fcfCagr5Y)) {
             if (fcfCagr2Y < (fcfCagr5Y * 0.7)) defaultN = 3; // Growth slowing significantly
@@ -1033,6 +1072,14 @@ const fetchFinancials = async (symbol, detailsContainer) => {
             </div>`;
 
         // 3. Snapshot Tab Content (Historical Fundamentals)
+        // *** UPDATED displayOrderSnapshot ***
+        const displayOrderSnapshot = [
+            'Revenue', 'EBIT', 'Net Earnings', 'Net Earn. Marg.(%)',
+            'Operating Cash Flow', 'Capital Expenditures', 'Reported FCF', 'Ending Cash', // Added requested cash flow items
+            'Total Assets', 'Total Liabilities', 'Shareholders Equity', 'Debt/Asset Ratio (%)', 'ROA (%)'
+        ];
+        // *** END UPDATE ***
+
         let snapshotContentHtml = `<div id="${symbol}-snapshot" class="tab-content active">
             <h4>Financial Snapshot (Annual - ${latestYear})</h4>
             <div class="table-container" style="overflow-x: auto;">
@@ -1048,7 +1095,7 @@ const fetchFinancials = async (symbol, detailsContainer) => {
                     </tr>
                 </thead>
                 <tbody>`;
-        const displayOrderSnapshot = ['Revenue', 'EBIT', 'Net Earnings', 'Net Earn. Marg.(%)', 'Operating Cash Flow', 'Free Cash Flow', 'Total Assets', 'Total Liabilities', 'Shareholders Equity', 'Debt/Asset Ratio (%)', 'ROA (%)'];
+
         displayOrderSnapshot.forEach(metricName => {
             snapshotContentHtml += `<tr><td>${metricName}</td>`;
             displayOffsets.forEach(offset => {
@@ -1062,6 +1109,7 @@ const fetchFinancials = async (symbol, detailsContainer) => {
                         colorClass = getPercentageColorClass(value, type, false); // false = not a growth rate
                         displayValue = formatPercent(value);
                     } else {
+                         // CapEx is usually negative, formatNumber handles it. No special coloring needed unless comparing growth.
                         displayValue = formatNumber(value);
                     }
                 }
@@ -1086,11 +1134,9 @@ const fetchFinancials = async (symbol, detailsContainer) => {
                     </tr>
                 </thead>
                 <tbody>`;
-        const displayOrderGrowth = displayOrderSnapshot; // Use same order for consistency
+        // Use the same display order for consistency, filtering out non-growth items if needed
+        const displayOrderGrowth = displayOrderSnapshot.filter(m => m !== 'Capital Expenditures'); // Filter out CapEx from growth view for now
         displayOrderGrowth.forEach(metricName => {
-            // Only show growth for metrics where it makes sense (skip ratios sometimes?)
-             // if (metricName.includes('%') && !metricName.includes('Growth')) continue; // Example: skip growth of margin %
-
             growthContentHtml += `<tr><td>${metricName}</td>`;
             Object.entries(growthYearsMap).forEach(([periodLabel, years]) => {
                 let displayValue = 'N/A';
@@ -1117,7 +1163,9 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         // 5. DCF Tab Content (Inputs and Output)
         const storagePrefix = `${LS_PREFIX_DCF}${activeWatchlistName}-${symbol}`;
         // Load saved values or use calculated defaults
-        const savedFcf0 = localStorage.getItem(`${storagePrefix}-fcf0`) ?? results.dcfDefaults.fcf0.toFixed(0);
+        // Ensure default fcf0 uses the calculated value, rounded
+        const defaultFcf0String = results.dcfDefaults.fcf0 !== null ? results.dcfDefaults.fcf0.toFixed(0) : '0';
+        const savedFcf0 = localStorage.getItem(`${storagePrefix}-fcf0`) ?? defaultFcf0String;
         const savedGr = localStorage.getItem(`${storagePrefix}-gr`) ?? (results.dcfDefaults.gr * 100).toFixed(1);
         const savedN = localStorage.getItem(`${storagePrefix}-n`) ?? results.dcfDefaults.n;
         const savedR = localStorage.getItem(`${storagePrefix}-r`) ?? (results.dcfDefaults.r * 100).toFixed(1);
@@ -1126,10 +1174,11 @@ const fetchFinancials = async (symbol, detailsContainer) => {
         let dcfContentHtml = `<div id="${symbol}-dcf" class="tab-content">
             <div id="valuation-section">
                 <h4>FCF Discounted Cash Flow (DCF) Valuation</h4>
+                 <p style="font-size: 0.85em; color: #555; margin-bottom: 10px;"><i>Note: FCF₀ below is based on Calculated FCF (OCF + CapEx) from the latest annual report.</i></p>
                 <div class="valuation-inputs">
                     <div>
-                        <label for="dcf-fcf0-${symbol}">Latest FCF (FCF₀)</label>
-                        <input type="number" id="dcf-fcf0-${symbol}" step="any" value="${savedFcf0}" data-default-value="${results.dcfDefaults.fcf0.toFixed(0)}">
+                        <label for="dcf-fcf0-${symbol}">Latest Calc. FCF (FCF₀)</label>
+                        <input type="number" id="dcf-fcf0-${symbol}" step="any" value="${savedFcf0}" data-default-value="${defaultFcf0String}">
                     </div>
                     <div>
                         <label for="dcf-gr-${symbol}">Growth Rate (GR %)</label>
@@ -1160,7 +1209,8 @@ const fetchFinancials = async (symbol, detailsContainer) => {
 
         // --- Assemble Final HTML and Inject ---
         detailsContainer.innerHTML = todayHtml + tabsHtml + snapshotContentHtml + growthContentHtml + dcfContentHtml;
-        detailsContainer.innerHTML += `<p style="font-size: 0.8em; color: #666; margin-top: 15px; padding: 0 10px;"><i>Note: Financials based on annual reports ending ~${latestReportItem.endDate}. TTM ratios use current market cap & latest annual fundamental data. FCF = OCF + CapEx (as CapEx is typically negative). CAGR calculated using available start/end points for the period.</i></p>`;
+        // *** Updated Note ***
+        detailsContainer.innerHTML += `<p style="font-size: 0.8em; color: #666; margin-top: 15px; padding: 0 10px;"><i>Note: Financials based on annual reports ending ~${latestReportItem.endDate}. TTM ratios use current market cap & latest annual fundamental data. CAGR calculated using available start/end points for the period. Reported FCF may differ from OCF + CapEx based on company reporting.</i></p>`;
 
         // --- Initial DCF Calculation ---
         // Calculate DCF automatically after loading the defaults/saved values
@@ -1645,11 +1695,20 @@ const setupHamburgerMenu = () => {
 
         // Close menu when a link inside is clicked
         menuDropdown.querySelectorAll('a.yahoo-link-button').forEach(link => {
-            link.addEventListener('click', () => {
-                 // Exception: Don't close immediately for file inputs if they were inside
-                 if (link.id !== 'load-watchlists') { // Assuming load local doesn't close
-                    menuDropdown.classList.remove('active');
+            link.addEventListener('click', (event) => { // Add event parameter
+                 // Exception: Don't close immediately for file inputs
+                 if (link.id === 'load-watchlists') {
+                    // The file input logic will handle closing later
+                    return;
                  }
+                  // Exception: Don't close for login/logout actions? Let status updates guide user.
+                 // Or close immediately? Let's close immediately for simplicity now.
+                 // if (link.id === 'login-google' || link.id === 'logout-google') {
+                 //   return;
+                 // }
+
+                 menuDropdown.classList.remove('active');
+
             });
         });
 
@@ -1680,7 +1739,7 @@ const saveLocalDataToFile = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setStatus('Watchlist data saved to local JSON file.', 'success');
-     menuDropdown.classList.remove('active'); // Close menu
+     // menuDropdown.classList.remove('active'); // Already handled by link click listener
 };
 
 const loadLocalDataFromFile = () => {
@@ -1689,11 +1748,12 @@ const loadLocalDataFromFile = () => {
     input.accept = 'application/json,.json'; // Accept .json extension
     input.style.display = 'none';
 
-    input.addEventListener('change', (event) => {
+    const handleFileLoad = (event) => { // Define handler separately
         const file = event.target.files[0];
         if (!file) {
-             menuDropdown.classList.remove('active'); // Close menu if cancelled
-             return;
+            // menuDropdown.classList.remove('active'); // Close menu if cancelled - handled below
+            cleanupInput();
+            return;
         }
 
         const reader = new FileReader();
@@ -1720,43 +1780,91 @@ const loadLocalDataFromFile = () => {
                 Object.keys(loadedData).forEach(key => {
                     // Only load keys with expected prefixes to avoid loading unrelated data
                      if (key.startsWith(LS_PREFIX_APP) || key.startsWith(LS_PREFIX_DCF)) {
-                         localStorage.setItem(key, loadedData[key]);
+                         // Handle potential data type issues if loading from older files/formats
+                         let value = loadedData[key];
+                         // Example: Ensure arrays are arrays (if loading very old data)
+                         if (key === `${LS_PREFIX_APP}allWatchlists_v1` && typeof value === 'string') {
+                            try { value = JSON.parse(value); } catch { /* ignore parse error */ }
+                         }
+                         localStorage.setItem(key, typeof value === 'object' ? JSON.stringify(value) : value); // Store objects as strings
                      } else {
                          console.warn(`Skipping unexpected key from JSON file: ${key}`);
                      }
                 });
 
-                loadAppDataFromLocalStorage(); // Reload app state from the newly populated LS
-                setStatus('Watchlists loaded successfully from local file.', 'success');
+                 // Reload app state from the newly populated LS
+                 // Need to parse the watchlist string back into an object before loadAppData...
+                 const storedWatchlists = localStorage.getItem(`${LS_PREFIX_APP}allWatchlists_v1`);
+                 if (storedWatchlists) {
+                     try {
+                         allWatchlists = JSON.parse(storedWatchlists);
+                     } catch (parseError) {
+                          console.error("Error parsing watchlists from loaded file:", parseError);
+                          allWatchlists = { [DEFAULT_WATCHLIST_NAME]: [] }; // Reset on error
+                          setStatus('Error parsing watchlist data in file.', 'error');
+                     }
+                 } else {
+                     allWatchlists = { [DEFAULT_WATCHLIST_NAME]: [] }; // Reset if missing
+                 }
+
+                 loadAppDataFromLocalStorage(); // This should now work correctly
+                 setStatus('Watchlists loaded successfully from local file.', 'success');
+
 
             } catch (error) {
                 console.error('Error processing JSON file:', error);
                 setStatus(`Error loading file: ${error.message}`, 'error');
             } finally {
-                 menuDropdown.classList.remove('active'); // Close menu after processing
-                 document.body.removeChild(input); // Clean up input element
+                 // menuDropdown.classList.remove('active'); // Close menu after processing - handled below
+                 cleanupInput();
             }
         };
          reader.onerror = (e) => {
              console.error("FileReader error:", e);
              setStatus("Error reading file.", "error");
-             menuDropdown.classList.remove('active');
-             document.body.removeChild(input);
+             // menuDropdown.classList.remove('active'); - handled below
+             cleanupInput();
          };
 
         reader.readAsText(file); // Read the file content
-    });
+    };
 
+    const cleanupInput = () => {
+        input.removeEventListener('change', handleFileLoad);
+        document.body.removeChild(input);
+        if (menuDropdown.classList.contains('active')) {
+             menuDropdown.classList.remove('active'); // Ensure menu closes even on cancel/error
+        }
+    };
+
+    input.addEventListener('change', handleFileLoad); // Attach listener
+
+    // Add input to body and click, but handle removal in cleanup
     document.body.appendChild(input);
-    input.click(); // Trigger file selection dialog
-    // Don't remove input immediately, wait for 'change' event handler
-     // Don't close menu here, let the event handlers do it.
+    input.click();
+
+    // If the user cancels the file dialog, the 'change' event won't fire.
+    // We need a way to detect cancellation to clean up the input element and close the menu.
+    // A common trick is to listen for window focus changes shortly after clicking.
+    window.addEventListener('focus', () => {
+        // Delay check slightly to allow file dialog to potentially close
+        setTimeout(() => {
+            // If the input is still in the DOM, it likely means the dialog was cancelled
+            if (document.body.contains(input)) {
+                 console.log("File dialog likely cancelled by user.");
+                 cleanupInput();
+            }
+        }, 500); // Adjust delay if needed
+    }, { once: true }); // Listen only once
+
+
+    // Do *not* close menu here - let the handlers do it
 };
 
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
-  console.log("DOM Loaded - Watchlist v33 (Firebase Integration)");
+  console.log("DOM Loaded - Watchlist v33+ (Firebase + Reported FCF)");
 
   // Setup Hamburger Menu interactions
   setupHamburgerMenu();
@@ -1769,25 +1877,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-   // Local Save/Load Listeners
+   // Local Save/Load Listeners (prevent default handled inside functions if needed)
    saveLocalBtn.addEventListener('click', (e) => { e.preventDefault(); saveLocalDataToFile(); });
-   loadLocalBtn.addEventListener('click', (e) => { e.preventDefault(); loadLocalDataFromFile(); }); // Don't close menu here
+   loadLocalBtn.addEventListener('click', (e) => { e.preventDefault(); loadLocalDataFromFile(); });
 
 
   // Firebase Auth Listener (triggers UI updates and potentially data load on login)
   fbAuth.onAuthStateChanged(user => {
-    updateLoginUI(user);
+    updateLoginUI(user); // Handles button visibility too
     if (user) {
       // User logged in - consider auto-loading their data?
-      loadDataFromFirebase(); // Auto-load from Firebase on login/page refresh
-      console.log("User logged in:", user.uid);
-      setStatus(`Logged in as ${user.displayName || user.email}. Use menu to load cloud data.`, 'info', 6000);
+       console.log("User logged in, attempting to load from Firebase:", user.uid);
+       loadDataFromFirebase(); // Auto-load from Firebase on login/page refresh
+      // setStatus(`Logged in as ${user.displayName || user.email}. Loading cloud data...`, 'info'); // Status set within loadData...
 
     } else {
       // User logged out
       console.log("User logged out.");
-      // Reload data from local storage to ensure consistency?
-      // loadAppDataFromLocalStorage(); // Can cause issues if user intended to stay logged out
+      // When logged out, the app should reflect local storage state.
+      // If local storage was cleared by a Firebase load, then login failed/cancelled,
+      // it might be empty. loadAppDataFromLocalStorage() ensures *something* is loaded (even defaults).
+      // We call it here to ensure the UI reflects the non-logged-in (local) state.
+       loadAppDataFromLocalStorage();
     }
   });
 
@@ -1798,8 +1909,8 @@ document.addEventListener('DOMContentLoaded', () => {
    loadFirebaseBtn.addEventListener('click', (e) => { e.preventDefault(); loadDataFromFirebase(); });
 
 
-  // Load initial data (will load from LS by default)
-  loadAppDataFromLocalStorage();
+  // Load initial data (will load from LS by default, then potentially overwritten by Firebase auth listener)
+  // loadAppDataFromLocalStorage(); // Called within the auth listener now
 
   // Initial API Key Check
   if (!apiKey || apiKey.length < 10 || !apiKey.startsWith("cvi")) {
@@ -1808,10 +1919,11 @@ document.addEventListener('DOMContentLoaded', () => {
    // Firebase Init Check
    if (typeof firebase === 'undefined' || !firebase.app()) {
        setStatus("Firebase failed to initialize. Cloud features unavailable.", "error", 0);
-       // Disable cloud buttons if Firebase isn't working
-       loginGoogleBtn.style.display = 'none';
-       saveFirebaseBtn.style.display = 'none';
-       loadFirebaseBtn.style.display = 'none';
+       // Disable cloud buttons if Firebase isn't working (handled by updateLoginUI based on user state)
+       // loginGoogleBtn.style.display = 'none'; // Let updateLoginUI handle this
+       // saveFirebaseBtn.style.display = 'none';
+       // loadFirebaseBtn.style.display = 'none';
+       updateLoginUI(null); // Explicitly set to logged-out state if Firebase fails
    }
 
 });

@@ -224,8 +224,8 @@ h1 {
 .list-action-button,
 #rename-list-btn,
 #delete-list-btn,
-#calculate-dcf,
-#reset-dcf {
+.calculate-dcf, /* Use class selector for generic buttons */
+.reset-dcf {     /* Use class selector for generic buttons */
   padding: 10px 18px;
   background-color: var(--button-bg);
   color: var(--button-text);
@@ -241,8 +241,8 @@ h1 {
 .list-action-button:hover,
 #rename-list-btn:hover,
 #delete-list-btn:hover,
-#calculate-dcf:hover,
-#reset-dcf:hover {
+.calculate-dcf:hover,
+.reset-dcf:hover {
   background-color: var(--button-hover-bg);
 }
 
@@ -260,7 +260,7 @@ h1 {
 }
 
 .list-action-button:hover:not(:disabled) {
-  background-color: rgba(255, 255, 255, 0.2);
+  /* background-color: rgba(255, 255, 255, 0.2);  Let blue hover take precedence */
 }
 
 .external-links {
@@ -295,10 +295,13 @@ h1 {
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
-  padding: 0 0 12px 0;
-  background-image: linear-gradient(to right, rgba(250,250,250,0.5), rgba(240,240,245,0.8));
-  border-radius: 6px;
+  /* Adjusted padding and removed background image for simplicity */
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee; /* Add a subtle separator */
+  /* background-image: linear-gradient(to right, rgba(250,250,250,0.5), rgba(240,240,245,0.8)); */
+  /* border-radius: 6px; */
 }
+
 
 .stock-info {
   flex-grow: 1;
@@ -323,7 +326,8 @@ h1 {
 .stock-name {
   color: #555;
   font-style: italic;
-  flex-shrink: 1;
+  flex-shrink: 1; /* Allow name to shrink if needed */
+  min-width: 100px; /* Prevent excessive shrinking */
 }
 
 .stock-price {
@@ -357,7 +361,7 @@ h1 {
 
 .details-button {
   background-color: #0275d8;
-  
+
 }
 
 .remove-button {
@@ -433,18 +437,25 @@ h1 {
 
 .tab-content {
   display: none;
-  overflow-x: auto;
+  overflow-x: auto; /* Keep horizontal scroll for tables */
 }
 
 .tab-content.active {
   display: block;
 }
 
+/* Ensure table container allows scroll */
+.table-container {
+    overflow-x: auto;
+    width: 100%;
+    margin-bottom: 15px; /* Add some space below the table */
+}
+
 .details-table {
-  width: 100%;
+  width: 100%; /* Allow table to take full width within container */
   border-collapse: collapse;
   font-size: 0.88em;
-  margin-bottom: 15px;
+  /* Removed margin-bottom, handle spacing via .table-container */
 }
 
 .details-table th,
@@ -460,7 +471,9 @@ h1 {
 .details-table td:first-child {
   text-align: left;
   font-weight: 500;
-  white-space: nowrap;
+  white-space: normal; /* Allow metric names to wrap if needed */
+  /* Slightly wider first column */
+   min-width: 140px;
 }
 
 .details-table thead th {
@@ -579,34 +592,38 @@ h1 {
   flex-wrap: wrap;
 }
 
+/* Style specifically for buttons within valuation-buttons */
 .valuation-buttons button {
   padding: 9px 15px;
-  color: #333; /* Changed text color for better contrast on colored buttons */
+  /* color: #333; /* Changed text color for better contrast on colored buttons */
+  /* Text color set individually below */
   border: none;
   border-radius: 4px;
   cursor: pointer;
   transition: background-color 0.2s;
   font-size: 0.95em;
   font-weight: 500;
-  flex-grow: 1;
+  flex-grow: 1; /* Allow buttons to grow */
+  flex-basis: 100px; /* Minimum basis before wrapping */
 }
 
-#calculate-dcf {
+/* Specific colors for DCF buttons */
+.calculate-dcf {
   background-color: var(--success-color);
   color: white; /* Ensure text is readable */
 }
 
-#calculate-dcf:hover {
+.calculate-dcf:hover {
   background-color: #449d44;
 }
 
-#reset-dcf {
+.reset-dcf {
   background-color: var(--button-warn-bg);
-  border-color: #eea236;
+  /* border-color: #eea236; /* Removed border */
   color: white; /* Ensure text is readable */
 }
 
-#reset-dcf:hover {
+.reset-dcf:hover {
   background-color: #ec971f;
 }
 
@@ -623,26 +640,40 @@ h1 {
   font-size: 0.95em;
 }
 
+/* Style span within dcf output for label */
+#dcf-output p span {
+    font-weight: 600;
+    min-width: 150px; /* Ensure alignment */
+    display: inline-block;
+    color: #31708f; /* Slightly darker blue */
+}
+
+
 #dcf-comparison {
   font-weight: bold;
 }
 
 .value-undervalued {
-  color: #3c763d;
+  color: #3c763d; /* Dark Green */
 }
 
 .value-overvalued {
-  color: var(--error-color);
+  color: var(--error-color); /* Red */
 }
 
+/* Media Queries */
 @media (max-width: 1100px) {
-  .tab-content {
-    overflow-x: auto;
-  }
-  .details-table {
-    width: auto;
-  }
+  /* Ensure horizontal scroll works well */
+   .tab-content {
+        overflow-x: auto;
+   }
+   .details-table {
+        /* Let table width be determined by content, container handles scroll */
+        width: auto;
+        min-width: 100%; /* Ensure it fills container at minimum */
+   }
 }
+
 
 @media (max-width: 700px) {
   .top-controls {
@@ -677,19 +708,26 @@ h1 {
   .stock-header {
     flex-direction: column;
     align-items: stretch;
+    border-bottom: none; /* Remove bottom border when stacked */
+    margin-bottom: 0; /* Adjust spacing */
+    padding-bottom: 0;
   }
   .stock-info {
     order: 1;
+    border-bottom: 1px solid #eee; /* Add separator below info */
+    padding-bottom: 8px;
+    margin-bottom: 8px;
   }
   .stock-price {
     order: 2;
     text-align: left;
-    margin-top: 5px;
+    margin-top: 0; /* Adjust spacing */
     font-size: 1.15em;
+    margin-bottom: 10px; /* Space before actions */
   }
   .stock-actions {
     order: 3;
-    margin-top: 12px;
+    margin-top: 0; /* Adjust spacing */
     justify-content: flex-start;
   }
   .details-table {
@@ -729,10 +767,29 @@ h1 {
      height: 16px;
   }
   .tab-buttons {
+    /* Allow horizontal scrolling for tabs if they don't fit */
     overflow-x: auto;
+    flex-wrap: nowrap; /* Prevent wrapping */
+    padding-bottom: 2px; /* Add space for scrollbar */
   }
   .tab-button {
     padding: 6px 8px;
     font-size: 0.85em;
+    flex-shrink: 0; /* Prevent buttons from shrinking */
   }
+   .details-table th:first-child,
+   .details-table td:first-child {
+       min-width: 120px; /* Adjust first col width */
+       font-size: 0.95em; /* Slightly larger metric name */
+   }
+   .valuation-inputs {
+       grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); /* Even smaller */
+   }
+   /* Ensure valuation buttons stack nicely */
+    .valuation-buttons {
+       flex-direction: column; /* Stack buttons */
+   }
+    .valuation-buttons button {
+        width: 100%; /* Make buttons full width when stacked */
+    }
 }
